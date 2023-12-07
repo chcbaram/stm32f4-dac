@@ -33,6 +33,7 @@ bool hwInit(void)
   ledInit();
   i2cInit();
   eepromInit();
+  buttonInit();
 
 
   return true;
