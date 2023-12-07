@@ -29,6 +29,7 @@ bool     qbufferRead(qbuffer_t *p_node, uint8_t *p_data, uint32_t length);
 uint8_t *qbufferPeekWrite(qbuffer_t *p_node);
 uint8_t *qbufferPeekRead(qbuffer_t *p_node);
 uint32_t qbufferAvailable(qbuffer_t *p_node);
+uint32_t qbufferAvailableForWrite(qbuffer_t *p_node);
 void     qbufferFlush(qbuffer_t *p_node);
 
 

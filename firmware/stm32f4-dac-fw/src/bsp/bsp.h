@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#include <math.h>
+
 #include "def.h"
 #include "stm32f4xx_hal.h"
 

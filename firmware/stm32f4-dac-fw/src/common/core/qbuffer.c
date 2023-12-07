@@ -119,10 +119,20 @@ uint32_t qbufferAvailable(qbuffer_t *p_node)
 {
   uint32_t ret;
 
-
   ret = (p_node->len + p_node->in - p_node->out) % p_node->len;
 
   return ret;
+}
+
+uint32_t qbufferAvailableForWrite(qbuffer_t *p_node)
+{
+  uint32_t rx_len;
+  uint32_t wr_len;
+
+  rx_len = qbufferAvailable(p_node);
+  wr_len = (p_node->len - 1) - rx_len;
+
+  return wr_len;
 }
 
 void qbufferFlush(qbuffer_t *p_node)

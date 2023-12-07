@@ -34,6 +34,8 @@ bool hwInit(void)
   i2cInit();
   eepromInit();
   buttonInit();
+  es8156Init();
+  i2sInit();
 
 
   return true;

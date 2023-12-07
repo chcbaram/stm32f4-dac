@@ -11,6 +11,8 @@
 
 
 #define _USE_HW_FAULT
+#define _USE_HW_I2S
+#define _USE_HW_ES8156
 
 
 #define _USE_HW_LED                 

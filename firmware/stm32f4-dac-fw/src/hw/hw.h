@@ -20,7 +20,8 @@ extern "C" {
 #include "reset.h"
 #include "swtimer.h"
 #include "button.h"
-
+#include "es8156.h"
+#include "i2s.h"
 
 bool hwInit(void);
 
