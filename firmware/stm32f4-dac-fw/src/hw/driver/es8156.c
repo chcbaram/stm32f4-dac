@@ -15,6 +15,7 @@
 
 static void cliCmd(cli_args_t *args);
 static bool es8156InitRegs(void);
+static bool readReg(uint8_t reg_addr, uint8_t *p_data);
 static bool writeReg(uint8_t reg_addr, uint8_t data);
 static bool readRegs(uint8_t reg_addr, uint8_t *p_data, uint32_t length);
 static bool writeRegs(uint8_t reg_addr, uint8_t *p_data, uint32_t length);
@@ -76,9 +77,8 @@ bool es8156InitRegs(void)
 
 
   ret &= writeReg(ES8156_VOLUME_CONTROL_REG14, 100);
-
-  ret &= writeReg(ES8156_ANALOG_SYS2_REG21, 0x07);
-
+  ret &= writeReg(ES8156_ANALOG_SYS2_REG21,    0x07);
+  ret &= writeReg(ES8156_CLOCK_ON_OFF_REG08,   0x3F);
 
   reg  = 0;
   reg |= (1 << 3); // 0 – lineout
@@ -108,10 +108,52 @@ bool es8156InitRegs(void)
   ret &= writeReg(ES8156_ANALOG_SYS5_REG25,    reg);
 
   reg  = 0;
-  reg |= (3<<4);   // 3 - 16-bit
+  // reg |= (3<<4);   // 3 - 16-bit
+  reg |= (0<<4);   // 0 - 24-bit
   reg |= (0<<0);   // 0 - I2S
                    // 1 - Left Justified 
   ret &= writeReg(ES8156_DAC_SDP_REG11,       reg);
+
+  return ret;
+}
+
+bool es8156SetConfig(uint32_t sample_rate, uint32_t sample_depth)
+{
+  bool ret = true;
+
+
+  REG02_t reg_02;
+  readReg(ES8156_SCLK_MODE_REG02, (uint8_t *)&reg_02);
+  if (sample_rate < 48000)
+  {
+    reg_02.SOFT_MODE_SEL = 0;
+    reg_02.SPEED_MODE = 0;
+    ret &= writeReg(ES8156_SCLK_MODE_REG02, reg_02.data); 
+  }
+  else
+  {
+    reg_02.SOFT_MODE_SEL = 1;
+    ret &= writeReg(ES8156_SCLK_MODE_REG02, reg_02.data); 
+    reg_02.SPEED_MODE = 1;
+    ret &= writeReg(ES8156_SCLK_MODE_REG02, reg_02.data); 
+  }
+  
+
+
+  REG11_t reg_11;
+  readReg(ES8156_DAC_SDP_REG11, (uint8_t *)&reg_11);
+  if (sample_depth == 24)
+  {    
+    reg_11.SP_WL = 0; 
+  }
+  else
+  {
+    reg_11.SP_WL = 3; 
+  }
+  ret &= writeReg(ES8156_DAC_SDP_REG11, reg_11.data); 
+    
+
+   
 
   return ret;
 }
@@ -138,6 +180,15 @@ bool es8156SetVolume(uint8_t volume)
 uint8_t es8156GetVolume(void)
 {
   return main_volume;
+}
+
+bool readReg(uint8_t reg_addr, uint8_t *p_data)
+{
+  bool ret;
+
+  ret = readRegs(reg_addr, p_data, 1);
+
+  return ret;
 }
 
 bool writeReg(uint8_t reg_addr, uint8_t data)

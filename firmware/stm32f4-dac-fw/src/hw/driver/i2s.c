@@ -6,16 +6,16 @@
 #include "gpio.h"
 #include "qbuffer.h"
 #include "buzzer.h"
-
+#include "es8156.h"
 
 
 typedef enum
 {
-  I2S_BIT_LEN_8BIT  = 1,
-  I2S_BIT_LEN_16BIT = 2,
-  I2S_BIT_LEN_24BIT = 3,
-  I2S_BIT_LEN_32BIT = 4,
-} I2sBitRate_t;
+  I2S_BIT_DEPTH_8BIT  = 8,
+  I2S_BIT_DEPTH_16BIT = 16,
+  I2S_BIT_DEPTH_24BIT = 24,
+  I2S_BIT_DEPTH_32BIT = 32,
+} I2sBitDepth_t;
 
 typedef struct
 {
@@ -23,10 +23,11 @@ typedef struct
 } i2s_cfg_t;
 
 #define I2S_SAMPLERATE_MAX      I2S_AUDIOFREQ_96K
-#define I2S_SAMPLERATE_HZ       I2S_AUDIOFREQ_16K
+#define I2S_SAMPLERATE_HZ       I2S_AUDIOFREQ_48K
 #define I2S_BUF_MS              (4)
 #define I2S_BUF_FRAME_LEN       ((I2S_SAMPLERATE_MAX * 2 * I2S_BUF_MS) / 1000)  // 96Khz, Stereo, 4ms
 #define I2S_BUF_CNT             16
+
 
 
 #ifdef _USE_HW_CLI
@@ -37,18 +38,25 @@ static bool is_init = false;
 static bool is_started = false;
 static bool is_busy = false;
 static uint32_t i2s_sample_rate = I2S_SAMPLERATE_HZ;
+static uint16_t i2s_sample_bytes = 4;
+static uint16_t i2s_num_of_ch = 2;
 
-static int16_t  i2s_frame_buf[I2S_BUF_FRAME_LEN * 2];
+static I2sBitDepth_t i2s_sample_depth = I2S_BIT_DEPTH_24BIT;
+
+
+static int32_t  i2s_frame_buf[I2S_BUF_FRAME_LEN * 2];
 static uint32_t i2s_frame_len = 0;
 static int16_t  i2s_volume = 100;
 static i2s_cfg_t i2s_cfg;
-// static I2sBitRate_t i2s_bit_len = I2S_BIT_LEN_24BIT;
+
+
 
 static qbuffer_t i2s_q;
-static int16_t   i2s_q_buf[I2S_BUF_FRAME_LEN * I2S_BUF_CNT];
+static int32_t   i2s_q_buf[I2S_BUF_FRAME_LEN * I2S_BUF_CNT];
 
 static I2S_HandleTypeDef hi2s2;
 static DMA_HandleTypeDef hdma_spi2_tx;
+
 
 
 
@@ -63,7 +71,7 @@ bool i2sInit(void)
   hi2s2.Instance                = SPI2;
   hi2s2.Init.Mode               = I2S_MODE_MASTER_TX;
   hi2s2.Init.Standard           = I2S_STANDARD_PHILIPS;
-  hi2s2.Init.DataFormat         = I2S_DATAFORMAT_16B;
+  hi2s2.Init.DataFormat         = I2S_DATAFORMAT_24B;
   hi2s2.Init.MCLKOutput         = I2S_MCLKOUTPUT_ENABLE;
   hi2s2.Init.AudioFreq          = I2S_SAMPLERATE_HZ;
   hi2s2.Init.CPOL               = I2S_CPOL_LOW;
@@ -74,9 +82,12 @@ bool i2sInit(void)
     ret = false;
   }
 
+  es8156SetConfig(i2s_sample_rate, i2s_sample_depth);
+
   qbufferCreateBySize(&i2s_q, (uint8_t *)i2s_q_buf, sizeof(int32_t), I2S_BUF_FRAME_LEN * I2S_BUF_CNT);
 
   i2s_frame_len = (i2s_sample_rate * 2 * I2S_BUF_MS) / 1000;
+  i2s_sample_bytes = hi2s2.Init.DataFormat == I2S_DATAFORMAT_16B ? 2:4;
 
   i2sCfgLoad();
   i2sStart();
@@ -254,6 +265,12 @@ bool i2sPlayBeep(uint32_t freq_hz, uint16_t volume, uint32_t time_ms)
   float div_freq;
   int8_t mix_ch;
   int32_t volume_out;
+  uint32_t sample_num;
+  uint32_t sample_num_max;
+
+
+  if (time_ms == 0)
+    return true;
 
 
   volume = constrain(volume, 0, 100);
@@ -262,24 +279,29 @@ bool i2sPlayBeep(uint32_t freq_hz, uint16_t volume, uint32_t time_ms)
   mix_ch =  i2sGetEmptyChannel();
 
   div_freq = (float)sample_rate/(float)freq_hz;
+  sample_num_max = (sample_rate/1000) * time_ms * i2s_num_of_ch;
 
+  sample_num = 0;
   pre_time = millis();
   while(millis()-pre_time <= time_ms)
   {
     if (i2sAvailableForWrite(mix_ch) >= num_samples)
     {
-      for (int i=0; i<num_samples; i+=2)
+      if (sample_num < sample_num_max)
       {
-        sample_point = i2sSin(2.0f * M_PI * (float)(sample_index) / ((float)div_freq));
-        sample[i + 0] = (int16_t)(sample_point * volume_out);
-        sample[i + 1] = (int16_t)(sample_point * volume_out);
-        sample_index = (sample_index + 1) % (int)(div_freq);
+        for (int i=0; i<num_samples; i+=2)
+        {
+          sample_point = i2sSin(2.0f * M_PI * (float)(sample_index) / ((float)div_freq));
+          sample[i + 0] = (int32_t)(sample_point * volume_out);
+          sample[i + 1] = (int32_t)(sample_point * volume_out);
+          sample_index = (sample_index + 1) % (int)(div_freq);
+        }
+        i2sWrite(mix_ch, sample, num_samples);
+        sample_num += num_samples;
       }
-      i2sWrite(mix_ch, sample, num_samples);
-    }
-    delay(2);
+    }  
   }
-
+  logPrintf("%d/%d ms\n", millis()-pre_time, time_ms);
   return true;
 }
 
@@ -296,12 +318,12 @@ bool i2sSetVolume(int16_t volume)
   return true;
 }
 
-bool i2sSetBitRate(I2sBitRate_t bit_rate)
+bool i2sSetBitDepth(I2sBitDepth_t bit_depth)
 {
   return true;
 }
 
-bool i2sGetBitRate(I2sBitRate_t *bit_rate)
+bool i2sGetBitDepth(I2sBitDepth_t *bit_depth)
 {
   return true;
 }
@@ -315,7 +337,7 @@ void i2sUpdateBuffer(uint8_t index)
   }
   else
   {
-    memset(&i2s_frame_buf[index * i2s_frame_len], 0, i2s_frame_len * 2 * sizeof(int32_t));
+    memset(&i2s_frame_buf[index * i2s_frame_len], 0, i2s_frame_len * i2s_sample_bytes);
     is_busy = false;
   }
 }
@@ -353,7 +375,6 @@ void HAL_I2S_MspInit(I2S_HandleTypeDef* i2sHandle)
   {
     __HAL_RCC_DMA1_CLK_ENABLE();
     __HAL_RCC_DMA2_CLK_ENABLE();
-    
 
     /* I2S2 clock enable */
     __HAL_RCC_SPI2_CLK_ENABLE();
@@ -369,14 +390,14 @@ void HAL_I2S_MspInit(I2S_HandleTypeDef* i2sHandle)
     GPIO_InitStruct.Pin = GPIO_PIN_3;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF5_SPI2;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
@@ -461,11 +482,7 @@ void cliI2s(cli_args_t *args)
     freq = args->getData(1);
     time_ms = args->getData(2);
     
-    #if HW_I2S_LCD > 0
-    i2sPlayBeepLcd(&i2s_args, freq, 100, time_ms);
-    #else
     i2sPlayBeep(freq, 100, time_ms);
-    #endif
 
     ret = true;
   }
@@ -475,6 +492,7 @@ void cliI2s(cli_args_t *args)
     uint16_t melody[] = {NOTE_C4, NOTE_G3, NOTE_G3, NOTE_A3, NOTE_G3, 0, NOTE_B3, NOTE_C4};
     int note_durations[] = { 4, 8, 8, 4, 4, 4, 4, 4 };
 
+    uint32_t pre_time = millis();
     for (int i=0; i<8; i++) 
     {
       int note_duration = 1000 / note_durations[i];
@@ -482,6 +500,7 @@ void cliI2s(cli_args_t *args)
       i2sPlayBeep(melody[i], 100, note_duration);
       delay(note_duration * 0.3);    
     }
+    logPrintf("%d ms\n", millis()-pre_time);
     ret = true;
   }
 

@@ -89,12 +89,38 @@ typedef enum
   ES8156_VOL_MAX      = 0xFF, /*!< +32dB */
 } Es8156Volume_t;
 
+typedef union
+{
+  uint8_t data;
+  struct 
+  {
+    uint8_t MS_MODE       : 1;
+    uint8_t SPEED_MODE    : 1;
+    uint8_t SOFT_MODE_SEL : 1;
+    uint8_t EQ_HIGH_MODE  : 1;
+    uint8_t SCLK_INV_MODE : 1;
+    uint8_t SCLKLRCK_TRI  : 1;
+    uint8_t ISCLKLRCK_SEL : 1;
+    uint8_t SCLK_AS_MCLK  : 1;
+  };
+} REG02_t;
 
+typedef union
+{
+  uint8_t data;
+  struct 
+  {
+    uint8_t SP_PROTOCAL : 2;
+    uint8_t SP_LRP      : 1;
+    uint8_t SP_MUTE     : 1;
+    uint8_t SP_WL       : 3;     
+  };
+} REG11_t;
 
 bool es8156Init(void);
 bool es8156SetVolume(uint8_t volume);
 uint8_t es8156GetVolume(void);
-
+bool es8156SetConfig(uint32_t sample_rate, uint32_t sample_depth);
 
 #endif
 
