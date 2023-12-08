@@ -1209,6 +1209,7 @@ static void AUDIO_OUT_Stop(USBD_HandleTypeDef* pdev)
   USBD_LL_FlushEP(pdev, AUDIO_OUT_EP);
 
   ((USBD_AUDIO_ItfTypeDef *)pdev->pUserData[pdev->classId])->DeInit(0);
+  ((USBD_AUDIO_ItfTypeDef *)pdev->pUserData[pdev->classId])->AudioCmd(NULL, 0, AUDIO_CMD_STOP);
 
   AUDIO_Log("AUDIO_OUT_Stop() - OUT\n");
 }
