@@ -22,6 +22,7 @@ bool i2sCfgSave(void);
 
 int8_t   i2sGetEmptyChannel(void);
 uint32_t i2sAvailableForWrite(uint8_t ch);
+uint32_t i2sAvailableForRead(uint8_t ch);
 bool     i2sWrite(uint8_t ch, void *p_data, uint32_t samples);
 bool     i2sPlayNote(int8_t octave, int8_t note, uint16_t volume, uint32_t time_ms);
 bool     i2sPlayBeep(uint32_t freq_hz, uint16_t volume, uint32_t time_ms);
@@ -33,6 +34,10 @@ int16_t  i2sGetVolume(void);
 bool     i2sSetVolume(int16_t volume);
 bool     i2sMute(bool enable);
 bool     i2sIsMute(void);
+
+bool i2sWriteBytes(uint8_t ch, uint8_t *p_data, uint32_t length);
+uint32_t i2sZeroCntGet(void);
+uint32_t i2sZeroCntClear(void);
 
 #endif
 

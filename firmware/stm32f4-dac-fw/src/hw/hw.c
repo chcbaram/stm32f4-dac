@@ -37,6 +37,8 @@ bool hwInit(void)
   es8156Init();
   i2sInit();
   
+  usbInit();
+  usbBegin(USB_AUDIO_MODE);
 
   return true;
 }

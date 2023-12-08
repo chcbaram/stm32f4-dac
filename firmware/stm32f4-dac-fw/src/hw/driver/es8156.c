@@ -155,7 +155,7 @@ bool es8156SetVolume(uint8_t volume)
 
   uint8_t d;
   
-  d = cmap(main_volume, 0, 100, 0, 255);
+  d = cmap(main_volume, 0, 100, 0, 0xBF);
   if (0 == main_volume) 
   {
     d = 0;

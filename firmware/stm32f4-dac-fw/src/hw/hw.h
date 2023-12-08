@@ -22,6 +22,8 @@ extern "C" {
 #include "button.h"
 #include "es8156.h"
 #include "i2s.h"
+#include "usb.h"
+#include "cdc.h"
 
 bool hwInit(void);
 

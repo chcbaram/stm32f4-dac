@@ -41,15 +41,17 @@ static bool is_busy = false;
 static uint32_t i2s_sample_rate = I2S_SAMPLERATE_HZ;
 static uint16_t i2s_sample_bytes = 4;
 static uint16_t i2s_num_of_ch = 2;
+static uint16_t i2s_num_of_bytes = 3;
 
 static I2sBitDepth_t i2s_sample_depth = I2S_BIT_DEPTH_24BIT;
 
 
 static int32_t  i2s_frame_buf[I2S_BUF_FRAME_LEN * 2];
 static uint32_t i2s_frame_len = 0;
-static int16_t  i2s_volume = 100;
+static int16_t  i2s_volume = 0;
 static i2s_cfg_t i2s_cfg;
 static bool     i2s_mute = true;
+static uint32_t i2s_zero_cnt = 0;
 
 
 static qbuffer_t i2s_q;
@@ -222,9 +224,37 @@ uint32_t i2sAvailableForWrite(uint8_t ch)
   return qbufferAvailableForWrite(&i2s_q);
 }
 
+uint32_t i2sAvailableForRead(uint8_t ch)
+{
+  return qbufferAvailable(&i2s_q);
+}
+
 bool i2sWrite(uint8_t ch, void *p_data, uint32_t samples)
 {
   return qbufferWrite(&i2s_q, p_data, samples);
+}
+
+bool i2sWriteBytes(uint8_t ch, uint8_t *p_data, uint32_t length)
+{
+  data_t wr_data;
+  uint8_t *p_buf;
+
+
+  wr_data.u32D = 0;
+  for (int i=0; i<length; i+=i2s_num_of_bytes)
+  {
+    p_buf = &p_data[i];
+
+    // TODO: 24비트 전송이 왜 안되는지 확인 필요 
+    // 
+    wr_data.u8Data[0] = p_buf[1];
+		wr_data.u8Data[1] = p_buf[2];
+		wr_data.u8Data[2] = 0;
+		wr_data.u8Data[3] = 0;
+
+    qbufferWrite(&i2s_q, (uint8_t *)&wr_data, 1);
+  }
+  return true;
 }
 
 // https://m.blog.naver.com/PostView.nhn?blogId=hojoon108&logNo=80145019745&proxyReferer=https:%2F%2Fwww.google.com%2F
@@ -323,6 +353,8 @@ bool i2sSetVolume(int16_t volume)
   volume = constrain(volume, 0, 100);
   i2s_volume = volume;
 
+  es8156SetVolume(i2s_volume);
+
   return true;
 }
 
@@ -363,7 +395,18 @@ void i2sUpdateBuffer(uint8_t index)
   {
     memset(&i2s_frame_buf[index * i2s_frame_len], 0, i2s_frame_len * i2s_sample_bytes);
     is_busy = false;
+    i2s_zero_cnt++;
   }
+}
+
+uint32_t i2sZeroCntGet(void)
+{
+  return i2s_zero_cnt;
+}
+
+uint32_t i2sZeroCntClear(void)
+{
+  i2s_zero_cnt = 0;
 }
 
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
@@ -436,7 +479,7 @@ void HAL_I2S_MspInit(I2S_HandleTypeDef* i2sHandle)
     hdma_spi2_tx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
     hdma_spi2_tx.Init.Mode      = DMA_CIRCULAR;
     hdma_spi2_tx.Init.Priority  = DMA_PRIORITY_LOW;
-    hdma_spi2_tx.Init.FIFOMode  = DMA_FIFOMODE_DISABLE;
+    hdma_spi2_tx.Init.FIFOMode  = DMA_FIFOMODE_ENABLE;
     if (HAL_DMA_Init(&hdma_spi2_tx) != HAL_OK)
     {
       Error_Handler();
@@ -497,6 +540,26 @@ void cliI2s(cli_args_t *args)
     cliPrintf("i2s ch        : %d \n", i2s_num_of_ch);
     cliPrintf("i2s buf ms    : %d ms\n", I2S_BUF_MS);
     cliPrintf("i2s frame len : %d \n", i2s_frame_len);
+    cliPrintf("i2s mute      : %s \n", i2sIsMute() ? "ON":"OFF");
+    ret = true;
+  }
+
+  if (args->argc == 1 && args->isStr(0, "show") == true)
+  {
+    uint32_t pre_time;
+
+    i2s_zero_cnt = 0;
+    pre_time = millis();
+    while(cliKeepLoop())
+    {
+      if (millis()-pre_time >= 1000)
+      {
+        pre_time = millis();
+        cliPrintf("i2s zero cnt : %d\n", i2s_zero_cnt);
+        i2s_zero_cnt = 0;
+      }
+      delay(1);
+    }
     ret = true;
   }
 
@@ -535,11 +598,22 @@ void cliI2s(cli_args_t *args)
     ret = true;
   }
 
+  if (args->argc == 2 && args->isStr(0, "mute"))
+  {
+    if (args->isStr(1, "on"))
+      i2sMute(true);
+    else
+      i2sMute(false);
+    ret = false;
+  }
+
   if (ret != true)
   {
     cliPrintf("i2s info\n");
+    cliPrintf("i2s show\n");
     cliPrintf("i2s melody\n");
     cliPrintf("i2s beep freq time_ms\n");
+    cliPrintf("i2s mute on:off\n");
   }
 }
 #endif

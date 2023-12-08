@@ -54,6 +54,12 @@
 #define _USE_HW_EEPROM
 #define      HW_EEPROM_MAX_SIZE     (512)
 
+#define _USE_HW_USB
+#define _USE_HW_CDC
+#define      HW_USE_CDC             0
+#define      HW_USE_MSC             0
+#define      HW_USE_AUDIO           1
+
 
 //-- CLI
 //

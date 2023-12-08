@@ -174,9 +174,6 @@ extern "C" {
 
 #define USBD_EP_TYPE_CTRL                               0x00U
 #define USBD_EP_TYPE_ISOC                               0x01U
-#define USBD_EP_TYPE_ISOC_ASYNC                         0x05U
-#define USBD_EP_TYPE_ISOC_ADAPT                         0x09U
-#define USBD_EP_TYPE_ISOC_SYNC                          0x0DU
 #define USBD_EP_TYPE_BULK                               0x02U
 #define USBD_EP_TYPE_INTR                               0x03U
 
@@ -419,9 +416,7 @@ typedef enum
   */
 __STATIC_INLINE uint16_t SWAPBYTE(uint8_t *addr)
 {
-  uint16_t _SwapVal;
-  uint16_t _Byte1;
-  uint16_t _Byte2;
+  uint16_t _SwapVal, _Byte1, _Byte2;
   uint8_t *_pbuff = addr;
 
   _Byte1 = *(uint8_t *)_pbuff;
