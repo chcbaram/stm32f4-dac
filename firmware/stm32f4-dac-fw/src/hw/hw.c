@@ -36,7 +36,7 @@ bool hwInit(void)
   buttonInit();
   es8156Init();
   i2sInit();
-
+  
 
   return true;
 }

@@ -24,8 +24,9 @@ typedef struct
 
 #define I2S_SAMPLERATE_MAX      I2S_AUDIOFREQ_96K
 #define I2S_SAMPLERATE_HZ       I2S_AUDIOFREQ_48K
+#define I2S_BUF_CH              (2)
 #define I2S_BUF_MS              (4)
-#define I2S_BUF_FRAME_LEN       ((I2S_SAMPLERATE_MAX * 2 * I2S_BUF_MS) / 1000)  // 96Khz, Stereo, 4ms
+#define I2S_BUF_FRAME_LEN       ((I2S_SAMPLERATE_MAX * I2S_BUF_CH * I2S_BUF_MS) / 1000)  // 96Khz, Stereo, 4ms
 #define I2S_BUF_CNT             16
 
 
@@ -48,7 +49,7 @@ static int32_t  i2s_frame_buf[I2S_BUF_FRAME_LEN * 2];
 static uint32_t i2s_frame_len = 0;
 static int16_t  i2s_volume = 100;
 static i2s_cfg_t i2s_cfg;
-
+static bool     i2s_mute = true;
 
 
 static qbuffer_t i2s_q;
@@ -90,7 +91,9 @@ bool i2sInit(void)
   i2s_sample_bytes = hi2s2.Init.DataFormat == I2S_DATAFORMAT_16B ? 2:4;
 
   i2sCfgLoad();
-  i2sStart();
+
+  i2sMute(true);
+  i2sStart();    
 
   is_init = ret;
 
@@ -328,6 +331,22 @@ bool i2sGetBitDepth(I2sBitDepth_t *bit_depth)
   return true;
 }
 
+bool i2sMute(bool enable)
+{
+  bool ret;
+
+  ret = es8156SetMute(enable);
+  es8156SetEnable(!enable);
+  i2s_mute = enable;
+
+  return ret;
+}
+
+bool i2sIsMute(void)
+{
+  return i2s_mute;
+}
+
 void i2sUpdateBuffer(uint8_t index)
 {
   if (qbufferAvailable(&i2s_q) >= i2s_frame_len)
@@ -469,6 +488,8 @@ void cliI2s(cli_args_t *args)
 
     cliPrintf("i2s init      : %d\n", is_init);
     cliPrintf("i2s rate      : %d Khz\n", i2s_sample_rate/1000);
+    cliPrintf("i2s depth     : %d bit\n", i2s_sample_depth);
+    cliPrintf("i2s ch        : %d \n", i2s_num_of_ch);
     cliPrintf("i2s buf ms    : %d ms\n", I2S_BUF_MS);
     cliPrintf("i2s frame len : %d \n", i2s_frame_len);
     ret = true;
@@ -482,7 +503,9 @@ void cliI2s(cli_args_t *args)
     freq = args->getData(1);
     time_ms = args->getData(2);
     
+    i2sMute(false);
     i2sPlayBeep(freq, 100, time_ms);
+    i2sMute(true);
 
     ret = true;
   }
@@ -491,6 +514,8 @@ void cliI2s(cli_args_t *args)
   {
     uint16_t melody[] = {NOTE_C4, NOTE_G3, NOTE_G3, NOTE_A3, NOTE_G3, 0, NOTE_B3, NOTE_C4};
     int note_durations[] = { 4, 8, 8, 4, 4, 4, 4, 4 };
+
+    i2sMute(false);
 
     uint32_t pre_time = millis();
     for (int i=0; i<8; i++) 
@@ -501,6 +526,7 @@ void cliI2s(cli_args_t *args)
       delay(note_duration * 0.3);    
     }
     logPrintf("%d ms\n", millis()-pre_time);
+    i2sMute(true);
     ret = true;
   }
 

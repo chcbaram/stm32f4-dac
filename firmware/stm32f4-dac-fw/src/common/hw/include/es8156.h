@@ -121,6 +121,8 @@ bool es8156Init(void);
 bool es8156SetVolume(uint8_t volume);
 uint8_t es8156GetVolume(void);
 bool es8156SetConfig(uint32_t sample_rate, uint32_t sample_depth);
+bool es8156SetMute(bool enable);
+bool es8156SetEnable(bool enable);
 
 #endif
 

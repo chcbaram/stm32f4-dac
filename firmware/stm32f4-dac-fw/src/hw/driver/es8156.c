@@ -19,6 +19,7 @@ static bool readReg(uint8_t reg_addr, uint8_t *p_data);
 static bool writeReg(uint8_t reg_addr, uint8_t data);
 static bool readRegs(uint8_t reg_addr, uint8_t *p_data, uint32_t length);
 static bool writeRegs(uint8_t reg_addr, uint8_t *p_data, uint32_t length);
+static bool modifyReg(uint8_t reg_addr, uint8_t offset, uint8_t bit_len, uint8_t data);
 
 
 static uint8_t i2c_ch = _DEF_I2C1;
@@ -28,7 +29,7 @@ static bool    is_detected = false;
 #ifdef _USE_HW_RTOS
 static SemaphoreHandle_t mutex_lock = NULL;
 #endif
-static uint8_t main_volume = 75;
+static uint8_t main_volume = 45;
 
 
 
@@ -76,7 +77,7 @@ bool es8156InitRegs(void)
   ret &= writeReg(ES8156_RESET_REG00, 0x03);
 
 
-  ret &= writeReg(ES8156_VOLUME_CONTROL_REG14, 100);
+  ret &= writeReg(ES8156_VOLUME_CONTROL_REG14, 0);
   ret &= writeReg(ES8156_ANALOG_SYS2_REG21,    0x07);
   ret &= writeReg(ES8156_CLOCK_ON_OFF_REG08,   0x3F);
 
@@ -103,13 +104,13 @@ bool es8156InitRegs(void)
                    // 1 – power down analog DAC reference circuits
   reg |= (1 << 1); // 0 – disable internal reference circuits
                    // 1 – enable reference circuits
-  reg |= (0 << 0); // 0 – enable DAC              
+  reg |= (1 << 0); // 0 – enable DAC              
                    // 1 - power down DAC
-  ret &= writeReg(ES8156_ANALOG_SYS5_REG25,    reg);
+  ret &= writeReg(ES8156_ANALOG_SYS5_REG25,    reg);  
 
   reg  = 0;
-  // reg |= (3<<4);   // 3 - 16-bit
   reg |= (0<<4);   // 0 - 24-bit
+  reg |= (1<<3);   // 1 -  mute DAC input data to 0
   reg |= (0<<0);   // 0 - I2S
                    // 1 - Left Justified 
   ret &= writeReg(ES8156_DAC_SDP_REG11,       reg);
@@ -122,39 +123,27 @@ bool es8156SetConfig(uint32_t sample_rate, uint32_t sample_depth)
   bool ret = true;
 
 
-  REG02_t reg_02;
-  readReg(ES8156_SCLK_MODE_REG02, (uint8_t *)&reg_02);
-  if (sample_rate < 48000)
+  if (sample_rate <= 48000)
   {
-    reg_02.SOFT_MODE_SEL = 0;
-    reg_02.SPEED_MODE = 0;
-    ret &= writeReg(ES8156_SCLK_MODE_REG02, reg_02.data); 
+    ret &= modifyReg(ES8156_SCLK_MODE_REG02, 2, 1, 0); // 0 – hardware mode
+    ret &= modifyReg(ES8156_SCLK_MODE_REG02, 1, 1, 0); // 0 – single speed
   }
   else
   {
-    reg_02.SOFT_MODE_SEL = 1;
-    ret &= writeReg(ES8156_SCLK_MODE_REG02, reg_02.data); 
-    reg_02.SPEED_MODE = 1;
-    ret &= writeReg(ES8156_SCLK_MODE_REG02, reg_02.data); 
+    ret &= modifyReg(ES8156_SCLK_MODE_REG02, 2, 1, 1); // 1 – software mode
+    ret &= modifyReg(ES8156_SCLK_MODE_REG02, 1, 1, 1); // 1 – double speed
   }
   
 
-
-  REG11_t reg_11;
-  readReg(ES8156_DAC_SDP_REG11, (uint8_t *)&reg_11);
   if (sample_depth == 24)
   {    
-    reg_11.SP_WL = 0; 
+    ret &= modifyReg(ES8156_DAC_SDP_REG11, 4, 3, 0); // 000 – 24-bit
   }
   else
   {
-    reg_11.SP_WL = 3; 
+    ret &= modifyReg(ES8156_DAC_SDP_REG11, 4, 3, 3); // 011 – 16-bit
   }
-  ret &= writeReg(ES8156_DAC_SDP_REG11, reg_11.data); 
     
-
-   
-
   return ret;
 }
 
@@ -180,6 +169,34 @@ bool es8156SetVolume(uint8_t volume)
 uint8_t es8156GetVolume(void)
 {
   return main_volume;
+}
+
+bool es8156SetMute(bool enable)
+{
+  return modifyReg(ES8156_DAC_SDP_REG11, 3, 1, enable);
+}
+
+bool es8156SetEnable(bool enable)
+{
+  return modifyReg(ES8156_ANALOG_SYS5_REG25, 0, 1, !enable);
+}
+
+bool modifyReg(uint8_t reg_addr, uint8_t offset, uint8_t bit_len, uint8_t data)
+{
+  bool ret = true;
+  uint8_t reg;
+  uint8_t bit_mask;
+  
+  ret = readReg(reg_addr, &reg);
+
+  bit_mask = ((1<<bit_len) - 1)<<offset;
+
+  reg &= ~(bit_mask);
+  reg |= ((data<<offset) & bit_mask);
+
+  ret &= writeRegs(reg_addr, &reg, 1);
+
+  return ret;
 }
 
 bool readReg(uint8_t reg_addr, uint8_t *p_data)

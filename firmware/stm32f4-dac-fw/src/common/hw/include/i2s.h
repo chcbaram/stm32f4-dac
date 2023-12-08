@@ -31,7 +31,8 @@ uint32_t i2sGetSampleRate(void);
 
 int16_t  i2sGetVolume(void);
 bool     i2sSetVolume(int16_t volume);
-
+bool     i2sMute(bool enable);
+bool     i2sIsMute(void);
 
 #endif
 
