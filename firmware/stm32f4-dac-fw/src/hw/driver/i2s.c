@@ -350,7 +350,7 @@ bool i2sIsMute(void)
 void i2sUpdateBuffer(uint8_t index)
 {
   if (qbufferAvailable(&i2s_q) >= i2s_frame_len)
-  {    
+  {
     qbufferRead(&i2s_q, (uint8_t *)&i2s_frame_buf[index * i2s_frame_len], i2s_frame_len);
     is_busy = true;
   }

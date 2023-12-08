@@ -70,13 +70,12 @@ bool es8156InitRegs(void)
   bool ret = true;
   uint8_t reg;
 
-  delay(200);
-
   ret &= writeReg(ES8156_RESET_REG00, 0x1C);
   delay(10);
   ret &= writeReg(ES8156_RESET_REG00, 0x03);
+  delay(30);
 
-
+  ret &= writeReg(ES8156_SCLK_MODE_REG02,      0x04);
   ret &= writeReg(ES8156_VOLUME_CONTROL_REG14, 0);
   ret &= writeReg(ES8156_ANALOG_SYS2_REG21,    0x07);
   ret &= writeReg(ES8156_CLOCK_ON_OFF_REG08,   0x3F);
