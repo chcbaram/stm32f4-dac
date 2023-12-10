@@ -407,6 +407,7 @@ uint32_t i2sZeroCntGet(void)
 uint32_t i2sZeroCntClear(void)
 {
   i2s_zero_cnt = 0;
+  return 0;
 }
 
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
