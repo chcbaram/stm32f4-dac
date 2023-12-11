@@ -245,12 +245,13 @@ bool i2sWriteBytes(uint8_t ch, uint8_t *p_data, uint32_t length)
   {
     p_buf = &p_data[i];
 
-    // TODO: 24비트 전송이 왜 안되는지 확인 필요 
+    // 24비트 전송을 DMA로는 16비트씩 나눠서 보내기 때문에 
+    // 상위 16비트를 32비트 데이터의 하위 16비트에 할당해야 함.
     // 
     wr_data.u8Data[0] = p_buf[1];
 		wr_data.u8Data[1] = p_buf[2];
-		wr_data.u8Data[2] = 0;
-		wr_data.u8Data[3] = 0;
+		wr_data.u8Data[2] = 0x00;
+		wr_data.u8Data[3] = p_buf[0];
 
     qbufferWrite(&i2s_q, (uint8_t *)&wr_data, 1);
   }
