@@ -4,8 +4,16 @@
 #ifdef _USE_HW_BUTTON
 #include "gpio.h"
 #include "cli.h"
+#include "swtimer.h"
 
 
+typedef struct
+{
+  uint8_t     state;
+  bool        pressed;
+  uint16_t    pressed_cnt;
+  uint32_t    pre_time;
+} button_t;
 
 
 
@@ -22,7 +30,7 @@ typedef struct
 static void cliButton(cli_args_t *args);
 #endif
 static bool buttonGetPin(uint8_t ch);
-
+static void buttonISR(void *arg);
 
 static const button_pin_t button_pin[BUTTON_MAX_CH] =
     {
@@ -38,6 +46,7 @@ static const char *button_name[BUTTON_MAX_CH] =
 
 static bool is_enable = true;
 
+static button_t button_tbl[BUTTON_MAX_CH];
 
 
 
@@ -60,6 +69,25 @@ bool buttonInit(void)
     HAL_GPIO_Init(button_pin[i].port, &GPIO_InitStruct);
   }
 
+  for (int i=0; i<BUTTON_MAX_CH; i++)
+  {
+    button_tbl[i].state          = 0;
+    button_tbl[i].pressed_cnt    = 0;
+    button_tbl[i].pressed        = false;
+  }
+
+  swtimer_handle_t timer_ch;
+  timer_ch = swtimerGetHandle();
+  if (timer_ch >= 0)
+  {
+    swtimerSet(timer_ch, 10, LOOP_TIME, buttonISR, NULL);
+    swtimerStart(timer_ch);
+  }
+  else
+  {
+    logPrintf("[NG] buttonInit()\n     swtimerGetHandle()\n");
+  }
+
 #if CLI_USE(HW_BUTTON)
   cliAdd("button", cliButton);
 #endif
@@ -67,6 +95,53 @@ bool buttonInit(void)
   return ret;
 }
 
+void buttonISR(void *arg)
+{
+  enum
+  {
+    BTN_IDLE,
+    BTN_DEBOUNCE,
+    BTN_PRESSED,
+  };
+
+  for (int i=0; i<BUTTON_MAX_CH; i++)
+  {
+    button_t *p_btn = &button_tbl[i];
+
+    switch(p_btn->state)
+    {
+      case BTN_IDLE:
+        if (buttonGetPin(i) == true)
+        {
+          p_btn->pre_time = millis();
+          p_btn->state = BTN_DEBOUNCE;                    
+        }        
+        break;
+
+      case BTN_DEBOUNCE:
+        if (millis()-p_btn->pre_time >= 50)
+        {
+          p_btn->pressed = true;
+          p_btn->state = BTN_PRESSED;
+        }
+        else
+        {
+          if (buttonGetPin(i) == false)
+          {
+            p_btn->state = BTN_IDLE;    
+          }
+        }
+        break;
+
+      case BTN_PRESSED:
+        if (buttonGetPin(i) == false)
+        {
+          p_btn->state = BTN_IDLE;    
+        }      
+        break;
+    }
+  }
+}
 
 bool buttonGetPin(uint8_t ch)
 {
@@ -97,7 +172,7 @@ bool buttonGetPressed(uint8_t ch)
     return false;
   }
 
-  return buttonGetPin(ch);
+  return button_tbl[ch].pressed;
 }
 
 uint32_t buttonGetData(void)
@@ -136,6 +211,21 @@ uint8_t  buttonGetPressedCount(void)
   return ret;
 }
 
+uint32_t buttonGetClicked(uint8_t ch, bool reset)
+{
+  volatile uint32_t ret = 0;
+
+  if (ch >= BUTTON_MAX_CH || is_enable == false) return 0;
+
+  ret = button_tbl[ch].pressed;
+
+  if (reset)
+  {
+    button_tbl[ch].pressed = false;
+  }
+  return ret;
+}
+
 #if CLI_USE(HW_BUTTON)
 void cliButton(cli_args_t *args)
 {
@@ -165,10 +255,30 @@ void cliButton(cli_args_t *args)
     ret = true;
   }
 
+  if (args->argc == 1 && args->isStr(0, "clicked"))
+  {    
+    while(cliKeepLoop())
+    {
+      for (int i=0; i<BUTTON_MAX_CH; i++)
+      {
+        uint32_t clicked_cnt;
+
+        clicked_cnt = buttonGetClicked(i, true);
+        if (clicked_cnt > 0)
+        {
+          cliPrintf("ch %d clicked : %d\n", i, clicked_cnt);
+        }
+      }
+      delay(50);
+    }
+    ret = true;
+  }
+
   if (ret == false)
   {
     cliPrintf("button info\n");
     cliPrintf("button show\n");
+    cliPrintf("button clicked\n");
   }
 }
 #endif

@@ -37,6 +37,7 @@ uint32_t buttonGetReleasedTime(uint8_t ch);
 
 void     buttonSetRepeatTime(uint8_t ch, uint32_t detect_ms, uint32_t repeat_delay_ms, uint32_t repeat_ms);
 uint32_t buttonGetRepeatCount(uint8_t ch);
+uint32_t buttonGetClicked(uint8_t ch, bool reset);
 
 const char *buttonGetName(uint8_t ch);
 
